@@ -1,0 +1,6 @@
+{
+  "name": "Lettore JSON Universale",
+  "description": "Un lettore universale di JSON per creare widget dinamici e caroselli da incorporare in qualsiasi sito tramite iframe, con aggiornamento automatico.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
