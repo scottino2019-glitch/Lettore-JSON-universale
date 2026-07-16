@@ -90,11 +90,39 @@ export default function Configurator({
       const parsed = JSON.parse(jsonText);
       onJsonDataChange(parsed);
       onJsonUrlChange(''); // Local data now
-      // Reset keys guessing
-      guessKeys(parsed);
+      
+      // Keep existing key configurations if the keys still exist in the new data!
+      const paths = availableKeys(parsed);
+      const currentTitleKeyExists = currentConfig.titleKey && paths.includes(currentConfig.titleKey);
+      
+      if (!currentTitleKeyExists) {
+        // Only reset / re-guess keys if our titleKey is missing (i.e. structure changed completely)
+        guessKeys(parsed);
+      }
     } catch (err: any) {
       alert(`JSON non valido: ${err.message}`);
     }
+  };
+
+  const availableKeys = (data?: any) => {
+    const dataSource = data !== undefined ? data : jsonData;
+    const item = Array.isArray(dataSource) ? dataSource[0] : dataSource;
+    if (!item || typeof item !== 'object') return [];
+    
+    const paths: string[] = [];
+    const recurse = (obj: any, currentPath: string = '') => {
+      if (!obj) return;
+      Object.keys(obj).forEach(key => {
+        const val = obj[key];
+        const newPath = currentPath ? `${currentPath}.${key}` : key;
+        paths.push(newPath);
+        if (val && typeof val === 'object' && !Array.isArray(val) && Object.keys(val).length < 20 && newPath.split('.').length < 3) {
+          recurse(val, newPath);
+        }
+      });
+    };
+    recurse(item);
+    return paths;
   };
 
   // Guess best keys for mapping when new JSON loaded
@@ -102,44 +130,67 @@ export default function Configurator({
     const firstItem = Array.isArray(data) ? data[0] : data;
     if (!firstItem || typeof firstItem !== 'object') return;
 
-    const keys = Object.keys(firstItem);
+    // Use availableKeys to find all available paths (including deep paths) for the new data
+    const paths = availableKeys(data);
     const updates: Partial<WidgetConfig> = {};
 
-    // Guess Title
-    const titleCandidates = ['titolo', 'title', 'name', 'nome', 'autore', 'author', 'evento', 'event', 'metrica', 'metric', 'id'];
-    const titleKey = keys.find(k => titleCandidates.includes(k.toLowerCase()));
-    if (titleKey) updates.titleKey = titleKey;
+    // Guess Title - prioritize rich content words and names, only fallback to ID as last resort
+    const titleCandidates = ['titolo', 'title', 'word', 'name', 'nome', 'termine', 'concetto', 'vocabolario', 'autore', 'author', 'evento', 'event', 'metrica', 'metric'];
+    let titleKey = paths.find(k => titleCandidates.includes(k.split('.').pop()!.toLowerCase())) || '';
+    if (!titleKey && paths.includes('id')) {
+      titleKey = 'id';
+    }
+    if (!titleKey) {
+      titleKey = paths[0] || '';
+    }
+    updates.titleKey = titleKey;
 
     // Guess Subtitle
-    const subtitleCandidates = ['sottotitolo', 'subtitle', 'valore', 'value', 'price', 'prezzo', 'ruolo', 'role', 'orario', 'time', 'category', 'categoria'];
-    const subtitleKey = keys.find(k => subtitleCandidates.includes(k.toLowerCase()) && k !== titleKey);
-    if (subtitleKey) updates.subtitleKey = subtitleKey;
+    const subtitleCandidates = ['sottotitolo', 'subtitle', 'pronunciation', 'pronuncia', 'valore', 'value', 'price', 'prezzo', 'ruolo', 'role', 'orario', 'time', 'category', 'categoria'];
+    const subtitleKey = paths.find(k => subtitleCandidates.includes(k.split('.').pop()!.toLowerCase()) && k !== titleKey) || '';
+    updates.subtitleKey = subtitleKey;
 
     // Guess Body
-    const bodyCandidates = ['descrizione', 'description', 'body', 'content', 'commento', 'text', 'testo', 'andamento', 'trend', 'aula'];
-    const bodyKey = keys.find(k => bodyCandidates.includes(k.toLowerCase()) && k !== titleKey && k !== subtitleKey);
-    if (bodyKey) updates.bodyKey = bodyKey;
+    const bodyCandidates = ['descrizione', 'description', 'translation', 'traduzione', 'body', 'content', 'commento', 'text', 'testo', 'esempio', 'example', 'andamento', 'trend', 'aula'];
+    const bodyKey = paths.find(k => bodyCandidates.includes(k.split('.').pop()!.toLowerCase()) && k !== titleKey && k !== subtitleKey) || '';
+    updates.bodyKey = bodyKey;
 
     // Guess Image
-    const imageCandidates = ['foto', 'image', 'img', 'avatar', 'pic', 'foto_piatto', 'photo'];
-    const imageKey = keys.find(k => imageCandidates.includes(k.toLowerCase()));
-    if (imageKey) updates.imageKey = imageKey;
+    const imageCandidates = ['foto', 'image', 'img', 'avatar', 'pic', 'foto_piatto', 'photo', 'copertina', 'cover', 'thumbnail'];
+    const imageKey = paths.find(k => imageCandidates.includes(k.split('.').pop()!.toLowerCase())) || '';
+    updates.imageKey = imageKey;
 
     // Guess Badge
-    const badgeCandidates = ['categoria', 'category', 'stato', 'status', 'tag', 'punteggio', 'rating'];
-    const badgeKey = keys.find(k => badgeCandidates.includes(k.toLowerCase()) && k !== titleKey && k !== subtitleKey && k !== bodyKey);
-    if (badgeKey) updates.badgeKey = badgeKey;
+    const badgeCandidates = ['categoria', 'category', 'level', 'livello', 'stato', 'status', 'tag', 'punteggio', 'rating'];
+    const badgeKey = paths.find(k => badgeCandidates.includes(k.split('.').pop()!.toLowerCase()) && k !== titleKey && k !== subtitleKey && k !== bodyKey) || '';
+    updates.badgeKey = badgeKey;
 
     // Guess Color
     const colorCandidates = ['colore', 'color', 'colore_tag', 'colore_indicatore', 'bg', 'accent'];
-    const colorKey = keys.find(k => colorCandidates.includes(k.toLowerCase()));
-    if (colorKey) updates.colorKey = colorKey;
+    const colorKey = paths.find(k => colorCandidates.includes(k.split('.').pop()!.toLowerCase())) || '';
+    updates.colorKey = colorKey;
+
+    // Guess Video Key
+    const videoCandidates = ['youtube_id', 'video_id', 'video_url', 'video', 'youtube', 'yt', 'copertina_video', 'link_video', 'url_video'];
+    const videoKey = paths.find(k => videoCandidates.includes(k.split('.').pop()!.toLowerCase())) || '';
+    updates.videoKey = videoKey;
+
+    updates.extraKeys = []; // Reset extra keys when loading new structure
 
     onConfigChange({
       ...currentConfig,
       ...updates
     });
   };
+
+  // Auto-guess keys when jsonData changes if the current titleKey is not in the new keys
+  useEffect(() => {
+    if (!jsonData) return;
+    const paths = availableKeys(jsonData);
+    if (paths.length > 0 && currentConfig.titleKey && !paths.includes(currentConfig.titleKey)) {
+      guessKeys(jsonData);
+    }
+  }, [jsonData]);
 
   const handleFetchUrl = () => {
     if (tempUrl.trim()) {
@@ -158,6 +209,7 @@ export default function Configurator({
     const imageKey = currentConfig.imageKey || '';
     const badgeKey = currentConfig.badgeKey || '';
     const colorKey = currentConfig.colorKey || '';
+    const videoKey = currentConfig.videoKey || '';
     const fontSize = currentConfig.fontSize || 'base';
     const borderRadius = currentConfig.borderRadius || 'lg';
     const autoplay = currentConfig.autoplay ? 'true' : 'false';
@@ -181,6 +233,7 @@ export default function Configurator({
     imageKey: "${imageKey}",
     badgeKey: "${badgeKey}",
     colorKey: "${colorKey}",
+    videoKey: "${videoKey}",
     fontSize: "${fontSize}",
     borderRadius: "${borderRadius}",
     autoplay: ${autoplay},
@@ -269,7 +322,13 @@ export default function Configurator({
 
   const getVal = (item, key) => {
     if (!item || !key) return '';
-    return item[key] || '';
+    const parts = key.split('.');
+    let current = item;
+    for (const part of parts) {
+      if (current === null || current === undefined) return '';
+      current = current[part];
+    }
+    return current !== undefined && current !== null ? current : '';
   };
 
   // Exposed Actions
@@ -646,7 +705,22 @@ export default function Configurator({
       const badge = getVal(activeItem, CONFIG.badgeKey);
       const channel = getVal(activeItem, CONFIG.subtitleKey);
 
-      const youtubeId = activeItem.youtube_id || activeItem.video_id || "dQw4w9WgXcQ";
+      // Extract YouTube ID using a robust helper
+      const getYTId = (val) => {
+        if (!val || typeof val !== 'string') return "dQw4w9WgXcQ";
+        const str = val.trim();
+        if (/^[a-zA-Z0-9_-]{11}$/.test(str)) return str;
+        const match = str.match(/(?:youtube\\.com\\/watch\\?v=|youtu\\.be\\/|youtube\\.com\\/embed\\/|youtube\\.com\\/shorts\\/)([a-zA-Z0-9_-]{11})/i);
+        if (match && match[1]) return match[1];
+        const matchFallback = str.match(/(?:v=|\\/)([a-zA-Z0-9_-]{11})(?:&|\\?|$)/);
+        if (matchFallback && matchFallback[1]) return matchFallback[1];
+        return "dQw4w9WgXcQ";
+      };
+
+      const rawVideoVal = CONFIG.videoKey ? getVal(activeItem, CONFIG.videoKey) : '';
+      const youtubeId = rawVideoVal 
+        ? getYTId(rawVideoVal) 
+        : getYTId(activeItem.youtube_id || activeItem.video_id || activeItem.video_url || "dQw4w9WgXcQ");
 
       let playlistHtml = '';
       data.forEach((vItem, idx) => {
@@ -828,6 +902,7 @@ export default function Configurator({
     if (currentConfig.imageKey) params.set('imageKey', currentConfig.imageKey);
     if (currentConfig.badgeKey) params.set('badgeKey', currentConfig.badgeKey);
     if (currentConfig.colorKey) params.set('colorKey', currentConfig.colorKey);
+    if (currentConfig.videoKey) params.set('videoKey', currentConfig.videoKey);
     if (currentConfig.extraKeys.length > 0) params.set('extraKeys', currentConfig.extraKeys.join(','));
     
     params.set('refresh', String(currentConfig.refreshInterval));
@@ -860,14 +935,6 @@ export default function Configurator({
     navigator.clipboard.writeText(textToCopy);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
-  };
-
-  const availableKeys = () => {
-    const item = Array.isArray(jsonData) ? jsonData[0] : jsonData;
-    if (item && typeof item === 'object') {
-      return Object.keys(item);
-    }
-    return [];
   };
 
   const keys = availableKeys();
@@ -1122,6 +1189,19 @@ export default function Configurator({
                     </select>
                   </div>
 
+                  {/* Video Key Mapping */}
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-display font-black text-[#1A1C1E] uppercase tracking-tight">ID o URL Video YouTube (per Galleria Video)</label>
+                    <select
+                      value={currentConfig.videoKey}
+                      onChange={(e) => onConfigChange({ ...currentConfig, videoKey: e.target.value })}
+                      className="w-full border-2 border-[#1A1C1E] rounded-lg px-3 py-2 text-xs bg-white text-[#1A1C1E] font-mono focus:outline-none focus:ring-2 focus:ring-yellow-300"
+                    >
+                      <option value="">Nessuno</option>
+                      {keys.map(k => <option key={k} value={k}>{k}</option>)}
+                    </select>
+                  </div>
+
                   {/* Badge Mapping */}
                   <div className="space-y-1.5">
                     <label className="text-xs font-display font-black text-[#1A1C1E] uppercase tracking-tight">Badge / Categoria / Stato</label>
@@ -1154,7 +1234,8 @@ export default function Configurator({
                     <p className="text-[10px] text-slate-500 font-sans">Seleziona quali altri valori visualizzare nel footer delle schede:</p>
                     <div className="grid grid-cols-2 gap-1.5 mt-2 max-h-32 overflow-y-auto p-1.5 border-2 border-[#1A1C1E] rounded-lg bg-white">
                       {keys.map(key => {
-                        const isChecked = currentConfig.extraKeys.includes(key);
+                        const extraKeys = currentConfig.extraKeys || [];
+                        const isChecked = extraKeys.includes(key);
                         return (
                           <label key={key} className="flex items-center gap-2 text-xs p-1 hover:bg-[#FEF08A]/40 rounded cursor-pointer border border-transparent hover:border-[#1A1C1E] transition-all">
                             <input
@@ -1162,9 +1243,9 @@ export default function Configurator({
                               checked={isChecked}
                               onChange={(e) => {
                                 if (e.target.checked) {
-                                  onConfigChange({ ...currentConfig, extraKeys: [...currentConfig.extraKeys, key] });
+                                  onConfigChange({ ...currentConfig, extraKeys: [...extraKeys, key] });
                                 } else {
-                                  onConfigChange({ ...currentConfig, extraKeys: currentConfig.extraKeys.filter(k => k !== key) });
+                                  onConfigChange({ ...currentConfig, extraKeys: extraKeys.filter(k => k !== key) });
                                 }
                               }}
                               className="rounded border-2 border-[#1A1C1E] text-[#1A1C1E] focus:ring-yellow-300"

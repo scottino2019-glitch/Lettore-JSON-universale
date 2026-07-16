@@ -412,9 +412,9 @@ export default function WidgetView({
                 )}
 
                 {/* Extra values */}
-                {config.extraKeys.length > 0 && (
+                {(config.extraKeys || []).length > 0 && (
                   <div className="grid grid-cols-2 gap-2 mt-4 pt-4 border-t border-dashed opacity-75 border-slate-500/20 text-xs">
-                    {config.extraKeys.map((key, i) => {
+                    {(config.extraKeys || []).map((key, i) => {
                       const val = getKeyValue(item, key);
                       if (val === undefined || val === null) return null;
                       return (
@@ -550,9 +550,9 @@ export default function WidgetView({
                   </div>
 
                   {/* Extra keys row */}
-                  {config.extraKeys.length > 0 && (
+                  {(config.extraKeys || []).length > 0 && (
                     <div className="mt-3 pt-3 border-t border-dashed opacity-75 border-slate-500/20 text-[10px] grid grid-cols-2 gap-1.5">
-                      {config.extraKeys.map((key, i) => {
+                      {(config.extraKeys || []).map((key, i) => {
                         const val = getKeyValue(item, key);
                         if (val === undefined || val === null) return null;
                         return (
@@ -668,9 +668,9 @@ export default function WidgetView({
                       </p>
                     )}
 
-                    {config.extraKeys.length > 0 && (
+                    {(config.extraKeys || []).length > 0 && (
                       <div className="flex flex-wrap gap-x-4 gap-y-1 pt-2 border-t border-dashed border-slate-500/10 text-[10px] opacity-75">
-                        {config.extraKeys.map((key, i) => {
+                        {(config.extraKeys || []).map((key, i) => {
                           const val = getKeyValue(item, key);
                           if (val === undefined || val === null) return null;
                           return (
@@ -1147,11 +1147,22 @@ export default function WidgetView({
     const badge = getKeyValue(activeItem, config.badgeKey) || "";
     const channel = getKeyValue(activeItem, config.subtitleKey) || "";
 
-    // Detect YouTube ID
-    const youtubeId = activeItem.youtube_id || activeItem.video_id || 
-      (typeof activeItem.video_url === 'string' && activeItem.video_url.includes('v=') 
-        ? activeItem.video_url.split('v=')[1]?.split('&')[0] 
-        : "dQw4w9WgXcQ");
+    // Extract YouTube ID using a robust helper
+    const getYTId = (val: any): string => {
+      if (!val || typeof val !== 'string') return "dQw4w9WgXcQ";
+      const str = val.trim();
+      if (/^[a-zA-Z0-9_-]{11}$/.test(str)) return str;
+      const match = str.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/|youtube\.com\/shorts\/)([a-zA-Z0-9_-]{11})/i);
+      if (match && match[1]) return match[1];
+      const matchFallback = str.match(/(?:v=|\/)([a-zA-Z0-9_-]{11})(?:&|\?|$)/);
+      if (matchFallback && matchFallback[1]) return matchFallback[1];
+      return "dQw4w9WgXcQ";
+    };
+
+    const rawVideoVal = config.videoKey ? getKeyValue(activeItem, config.videoKey) : undefined;
+    const youtubeId = rawVideoVal 
+      ? getYTId(rawVideoVal) 
+      : getYTId(activeItem.youtube_id || activeItem.video_id || activeItem.video_url || "dQw4w9WgXcQ");
 
     return (
       <div className="p-4 md:p-6 space-y-4 text-[#1A1C1E]">
@@ -1328,6 +1339,11 @@ export default function WidgetView({
               style={{ backgroundColor: customColor }}
             />
             <span className="font-mono text-xs uppercase font-bold tracking-tight opacity-75">{category}</span>
+            {(item.level || item.livello) && (
+              <span className="px-1.5 py-0.5 rounded text-[8px] font-mono font-bold bg-[#1A1C1E] text-white uppercase tracking-tighter">
+                {item.level || item.livello}
+              </span>
+            )}
           </div>
           <span className="text-[10px] font-mono opacity-60">
             Clicca sulla carta per scoprirla
@@ -1338,7 +1354,7 @@ export default function WidgetView({
         <div className="my-4 flex-1 flex flex-col justify-center items-center">
           <div 
             onClick={toggleFlip}
-            className={`w-full max-w-sm aspect-[3/2] min-h-[180px] p-6 rounded-xl border-2 border-[#1A1C1E] flex flex-col justify-between cursor-pointer transition-all duration-300 select-none ${
+            className={`w-full max-w-sm min-h-[220px] p-5 rounded-xl border-2 border-[#1A1C1E] flex flex-col justify-between cursor-pointer transition-all duration-300 select-none ${
               isFlipped 
                 ? "bg-[#FEF08A]/10 shadow-[3px_3px_0px_0px_rgba(26,28,30,1)]" 
                 : "bg-white shadow-[5px_5px_0px_0px_rgba(26,28,30,1)]"
@@ -1346,8 +1362,8 @@ export default function WidgetView({
           >
             {/* Top tag inside card */}
             <div className="flex justify-between items-center">
-              <span className="text-[9px] font-mono font-bold uppercase tracking-widest text-slate-400">
-                {isFlipped ? "Risposta / Spiegazione 🎯" : "Domanda / Concetto 🤔"}
+              <span className="text-[8px] font-mono font-bold uppercase tracking-widest text-slate-400">
+                {isFlipped ? "Traduzione / Spiegazione 🎯" : "Termine / Vocabolo 🤔"}
               </span>
               {!isFlipped && hint && (
                 <button
@@ -1360,7 +1376,7 @@ export default function WidgetView({
             </div>
 
             {/* Main content inside card */}
-            <div className="my-4 text-center">
+            <div className="my-3 text-center">
               <AnimatePresence mode="wait">
                 <motion.div
                   key={isFlipped ? 'back' : 'front'}
@@ -1371,13 +1387,37 @@ export default function WidgetView({
                   className="font-display font-black text-[#1A1C1E] leading-snug"
                 >
                   {isFlipped ? (
-                    <p className="text-xs md:text-sm font-sans font-medium text-slate-700 leading-relaxed text-left">
-                      {back}
-                    </p>
+                    <div className="space-y-3 text-left">
+                      <p className="text-sm md:text-base font-display font-black text-center text-slate-800">
+                        {back}
+                      </p>
+                      
+                      {/* Language learning example sentence if present */}
+                      {(item.example || item.esempio) && (
+                        <div className="mt-2.5 pt-2.5 border-t border-dashed border-[#1A1C1E]/15 text-left space-y-1 bg-amber-50/30 p-2 rounded">
+                          <p className="text-[8px] uppercase font-mono font-bold text-slate-400 tracking-wider">Frase di esempio:</p>
+                          <p className="text-xs font-bold text-slate-800 leading-tight">{item.example || item.esempio}</p>
+                          {(item.examplePron || item.pronunciaEsempio) && (
+                            <p className="text-[9px] italic text-slate-500 font-mono">[{item.examplePron || item.pronunciaEsempio}]</p>
+                          )}
+                          {(item.exampleTrans || item.traduzioneEsempio) && (
+                            <p className="text-[11px] text-slate-600 leading-snug">{item.exampleTrans || item.traduzioneEsempio}</p>
+                          )}
+                        </div>
+                      )}
+                    </div>
                   ) : (
-                    <p className="text-sm md:text-base tracking-tight text-center">
-                      {front}
-                    </p>
+                    <div className="space-y-1.5">
+                      <p className="text-xl md:text-2xl font-display font-black text-center tracking-tight text-[#1A1C1E]">
+                        {front}
+                      </p>
+                      {/* Pronunciation from dedicated key or subtitleKey (hint) if defined */}
+                      {(item.pronunciation || item.pronuncia || (hint && hint !== front)) && (
+                        <p className="text-xs font-mono text-slate-500 italic text-center">
+                          [{item.pronunciation || item.pronuncia || hint}]
+                        </p>
+                      )}
+                    </div>
                   )}
                 </motion.div>
               </AnimatePresence>
@@ -1396,7 +1436,7 @@ export default function WidgetView({
               )}
               {isFlipped && (
                 <span className="text-[9px] font-mono text-emerald-600 font-bold tracking-tight bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
-                  ✔ Ottimo! Clicca di nuovo per girare
+                  ✔ Scoperto! Clicca di nuovo per rigirare
                 </span>
               )}
             </div>
