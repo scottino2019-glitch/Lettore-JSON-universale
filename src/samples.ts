@@ -141,6 +141,7 @@ export const SAMPLE_TEMPLATES: SampleTemplate[] = [
       imageKey: 'copertina',
       badgeKey: 'durata',
       colorKey: 'colore',
+      videoKey: 'youtube_id',
       cycleInterval: 0,
       autoplay: false,
       theme: 'highdensity',
@@ -185,6 +186,59 @@ export const SAMPLE_TEMPLATES: SampleTemplate[] = [
       bodyKey: 'spiegazione',
       badgeKey: 'categoria',
       colorKey: 'colore',
+      cycleInterval: 0,
+      autoplay: false,
+      theme: 'highdensity',
+      borderRadius: 'xl'
+    }
+  },
+  {
+    id: 'vocab_cards',
+    name: '🈸 Vocabolario & Lingue (Flashcard)',
+    description: 'Ideale per studiare vocaboli, pronunce, traduzioni ed esempi d\'uso di lingue straniere.',
+    icon: 'Languages',
+    data: [
+      {
+        id: "b1",
+        word: "안녕하세요",
+        pronunciation: "An-nyeong-ha-se-yo",
+        translation: "Ciao / Salve",
+        example: "안녕하세요, 만나서 반갑습니다.",
+        examplePron: "An-nyeong-ha-se-yo, man-na-seo ban-gap-seum-ni-da.",
+        exampleTrans: "Salve, piacere di conoscerti.",
+        category: "Saluti",
+        level: "beginner"
+      },
+      {
+        id: "b2",
+        word: "감사합니다",
+        pronunciation: "Gam-sa-ham-ni-da",
+        translation: "Grazie",
+        example: "도와주셔서 정말 감사합니다.",
+        examplePron: "Do-wa-ju-syeo-seo jeong-mal gam-sa-ham-ni-da.",
+        exampleTrans: "Grazie mille per avermi aiutato.",
+        category: "Saluti",
+        level: "beginner"
+      },
+      {
+        id: "b3",
+        word: "맛있어요",
+        pronunciation: "Mas-is-seo-yo",
+        translation: "È delizioso",
+        example: "이 한국 음식은 정말 맛있어요.",
+        examplePron: "I han-guk eum-sig-eun jeong-mal mas-is-seo-yo.",
+        exampleTrans: "Questo cibo coreano è davvero delizioso.",
+        category: "Cibo",
+        level: "intermediate"
+      }
+    ],
+    defaultConfig: {
+      layout: 'flashcard',
+      titleKey: 'word',
+      subtitleKey: 'pronunciation',
+      bodyKey: 'translation',
+      badgeKey: 'category',
+      colorKey: '',
       cycleInterval: 0,
       autoplay: false,
       theme: 'highdensity',
