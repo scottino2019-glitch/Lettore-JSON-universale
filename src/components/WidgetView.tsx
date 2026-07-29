@@ -17,7 +17,11 @@ import {
   Lightbulb,
   Award,
   BookOpen,
-  Tv
+  Tv,
+  Upload,
+  ImagePlus,
+  Camera,
+  Plus
 } from 'lucide-react';
 import { WidgetConfig, WidgetLayout, WidgetTheme } from '../types';
 
@@ -27,6 +31,7 @@ interface WidgetViewProps {
   isLoading?: boolean;
   error?: string | null;
   onManualRefresh?: () => void;
+  onDataChange?: (newData: any) => void;
   lastUpdated?: Date | null;
   isIframeMode?: boolean;
 }
@@ -37,6 +42,7 @@ export default function WidgetView({
   isLoading = false,
   error = null,
   onManualRefresh,
+  onDataChange,
   lastUpdated,
   isIframeMode = false
 }: WidgetViewProps) {
@@ -66,7 +72,7 @@ export default function WidgetView({
       clearInterval(cycleTimerRef.current);
     }
 
-    const needsCycling = ['carousel', 'ticker', 'metric'].includes(config.layout) && items.length > 1;
+    const needsCycling = ['carousel', 'ticker', 'metric', 'gallery'].includes(config.layout) && items.length > 1;
     if (needsCycling && config.autoplay && config.cycleInterval > 0) {
       cycleTimerRef.current = setInterval(() => {
         setActiveIndex((prev) => (prev + 1) % items.length);
@@ -87,7 +93,42 @@ export default function WidgetView({
     setFlashcardHint({});
     setSelectedVideoIndex(0);
     setIsPlayingVideo(false);
-  }, [items.length, config.layout]);
+  }, [data, config.layout]);
+
+  // Handle uploading photos directly inside WidgetView from mobile or PC
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+
+    const fileList: File[] = Array.from(files);
+    const readPromises = fileList.map((file, idx) => {
+      return new Promise<any>((resolve) => {
+        const reader = new FileReader();
+        reader.onload = (event) => {
+          resolve({
+            id: Date.now() + idx,
+            titolo: file.name.replace(/\.[^/.]+$/, ""),
+            luogo: "Foto Personale",
+            descrizione: `Caricata il ${new Date().toLocaleDateString()}`,
+            categoria: "Foto 📱",
+            foto: event.target?.result as string,
+            image: event.target?.result as string,
+            colore: "#0284c7"
+          });
+        };
+        reader.readAsDataURL(file);
+      });
+    });
+
+    Promise.all(readPromises).then((newItems) => {
+      const existing = Array.isArray(data) ? data : (data ? [data] : []);
+      const updated = [...existing, ...newItems];
+      if (onDataChange) {
+        onDataChange(updated);
+      }
+      setActiveIndex(existing.length); // focus on newly added image
+    });
+  };
 
   // Visual trigger for refresh button
   const handleRefreshClick = () => {
@@ -1141,28 +1182,47 @@ export default function WidgetView({
     const activeItem = items[selectedVideoIndex] || items[0];
     if (!activeItem) return null;
 
-    const title = getKeyValue(activeItem, config.titleKey) || "Senza Titolo";
-    const description = getKeyValue(activeItem, config.bodyKey) || "";
-    const thumbnail = getKeyValue(activeItem, config.imageKey) || "";
-    const badge = getKeyValue(activeItem, config.badgeKey) || "";
-    const channel = getKeyValue(activeItem, config.subtitleKey) || "";
+    const title = getKeyValue(activeItem, config.titleKey) ||
+      activeItem.title || activeItem.titolo || activeItem.video_title || activeItem.name || activeItem.nome || activeItem.word || "Senza Titolo";
+      
+    const description = getKeyValue(activeItem, config.bodyKey) ||
+      activeItem.description || activeItem.descrizione || activeItem.body || activeItem.text || activeItem.translation || "";
+
+    const thumbnail = getKeyValue(activeItem, config.imageKey) ||
+      activeItem.thumbnail || activeItem.thumb || activeItem.copertina || activeItem.image || activeItem.img || activeItem.photo || "";
+
+    const badge = getKeyValue(activeItem, config.badgeKey) ||
+      activeItem.badge || activeItem.category || activeItem.categoria || activeItem.duration || activeItem.durata || activeItem.level || "";
+
+    const channel = getKeyValue(activeItem, config.subtitleKey) ||
+      activeItem.channel || activeItem.canale || activeItem.author || activeItem.autore || activeItem.subtitle || activeItem.sottotitolo || "";
 
     // Extract YouTube ID using a robust helper
     const getYTId = (val: any): string => {
-      if (!val || typeof val !== 'string') return "dQw4w9WgXcQ";
+      if (!val || typeof val !== 'string') return "";
       const str = val.trim();
       if (/^[a-zA-Z0-9_-]{11}$/.test(str)) return str;
       const match = str.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/|youtube\.com\/shorts\/)([a-zA-Z0-9_-]{11})/i);
       if (match && match[1]) return match[1];
       const matchFallback = str.match(/(?:v=|\/)([a-zA-Z0-9_-]{11})(?:&|\?|$)/);
       if (matchFallback && matchFallback[1]) return matchFallback[1];
-      return "dQw4w9WgXcQ";
+      return "";
     };
 
-    const rawVideoVal = config.videoKey ? getKeyValue(activeItem, config.videoKey) : undefined;
-    const youtubeId = rawVideoVal 
-      ? getYTId(rawVideoVal) 
-      : getYTId(activeItem.youtube_id || activeItem.video_id || activeItem.video_url || "dQw4w9WgXcQ");
+    const rawVideoVal = (config.videoKey ? getKeyValue(activeItem, config.videoKey) : undefined) ||
+      activeItem.youtube_id ||
+      activeItem.video_id ||
+      activeItem.video_url ||
+      activeItem.video ||
+      activeItem.youtube ||
+      activeItem.url ||
+      activeItem.link ||
+      activeItem.src ||
+      activeItem.href ||
+      activeItem.yt ||
+      activeItem.embed;
+
+    const youtubeId = getYTId(rawVideoVal) || "dQw4w9WgXcQ";
 
     return (
       <div className="p-4 md:p-6 space-y-4 text-[#1A1C1E]">
@@ -1170,6 +1230,7 @@ export default function WidgetView({
         <div className="relative aspect-video w-full bg-black rounded-lg overflow-hidden border-2 border-[#1A1C1E] shadow-[4px_4px_0px_0px_rgba(26,28,30,1)]">
           {isPlayingVideo ? (
             <iframe
+              key={youtubeId}
               src={`https://www.youtube.com/embed/${youtubeId}?autoplay=1`}
               title={title}
               className="w-full h-full"
@@ -1250,10 +1311,10 @@ export default function WidgetView({
           <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
             {items.map((vItem, idx) => {
               const isActive = selectedVideoIndex === idx;
-              const vTitle = getKeyValue(vItem, config.titleKey) || "Senza Titolo";
-              const vChannel = getKeyValue(vItem, config.subtitleKey) || "";
-              const vDuration = getKeyValue(vItem, config.badgeKey) || "";
-              const vThumbnail = getKeyValue(vItem, config.imageKey) || "";
+              const vTitle = getKeyValue(vItem, config.titleKey) || vItem.title || vItem.titolo || vItem.video_title || vItem.name || vItem.nome || "Senza Titolo";
+              const vChannel = getKeyValue(vItem, config.subtitleKey) || vItem.channel || vItem.canale || vItem.author || vItem.autore || vItem.subtitle || "";
+              const vDuration = getKeyValue(vItem, config.badgeKey) || vItem.duration || vItem.durata || vItem.category || vItem.categoria || "";
+              const vThumbnail = getKeyValue(vItem, config.imageKey) || vItem.thumbnail || vItem.thumb || vItem.copertina || vItem.image || "";
 
               return (
                 <div
@@ -1468,7 +1529,186 @@ export default function WidgetView({
   };
 
   // ---------------------------------------------
-  // 10. RAW BEAUTIFIED JSON VIEW
+  // 10. PHOTO GALLERY / SLIDESHOW LAYOUT
+  // ---------------------------------------------
+  const renderGallery = () => {
+    const item = items[activeIndex];
+    if (!item) return null;
+
+    const title = getKeyValue(item, config.titleKey);
+    const subtitle = getKeyValue(item, config.subtitleKey);
+    const body = getKeyValue(item, config.bodyKey);
+    const mainImage = getKeyValue(item, config.imageKey) || item.image || item.photo || item.url || item.src;
+    const badge = getKeyValue(item, config.badgeKey);
+    const customColor = getKeyValue(item, config.colorKey);
+
+    return (
+      <div className="relative w-full h-full flex flex-col justify-between p-4 md:p-6 min-h-[360px] space-y-4">
+        {/* Main Photo Display Stage */}
+        <div className="relative w-full h-64 md:h-80 rounded-2xl overflow-hidden border border-slate-200/20 shadow-lg group bg-slate-900 flex items-center justify-center">
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={activeIndex}
+              variants={animVariants}
+              initial="initial"
+              animate="animate"
+              exit="exit"
+              transition={{ duration: 0.35 }}
+              className="absolute inset-0 w-full h-full"
+            >
+              {mainImage ? (
+                <img
+                  src={String(mainImage)}
+                  alt={String(title || `Foto ${activeIndex + 1}`)}
+                  className="w-full h-full object-cover"
+                  referrerPolicy="no-referrer"
+                  onError={(e) => {
+                    (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1579783902614-a3fb3927b675?auto=format&fit=crop&w=800&q=80';
+                  }}
+                />
+              ) : (
+                <div className="w-full h-full flex items-center justify-center bg-slate-800 text-slate-400 font-mono text-xs">
+                  Nessuna Immagine Trovata (Specifica imageKey)
+                </div>
+              )}
+              {/* Gradient Overlay for Text Readability */}
+              <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent pointer-events-none" />
+            </motion.div>
+          </AnimatePresence>
+
+          {/* Top Badge & Counter & Upload Button */}
+          <div className="absolute top-3 left-3 right-3 flex justify-between items-center z-10 gap-2">
+            {badge ? (
+              <span className={`px-2.5 py-1 border text-xs font-bold rounded-full backdrop-blur-md shadow-sm ${themeClasses.badge}`}>
+                {String(badge)}
+              </span>
+            ) : <div />}
+
+            <div className="flex items-center gap-2">
+              {onDataChange && (
+                <label className="cursor-pointer">
+                  <input
+                    type="file"
+                    accept="image/*"
+                    multiple
+                    onChange={handleImageUpload}
+                    className="hidden"
+                  />
+                  <span className="px-2.5 py-1 bg-white/90 hover:bg-white text-slate-900 text-[11px] font-bold rounded-full border border-slate-300 shadow-sm flex items-center gap-1.5 transition-all hover:scale-105 active:scale-95">
+                    <Camera className="w-3.5 h-3.5 text-sky-600" />
+                    <span>+ Foto</span>
+                  </span>
+                </label>
+              )}
+
+              <span className="px-2.5 py-1 bg-black/60 backdrop-blur-md text-white text-[11px] font-mono font-bold rounded-full border border-white/20">
+                {activeIndex + 1} / {items.length}
+              </span>
+            </div>
+          </div>
+
+          {/* Left/Right Arrow Navigation Controls */}
+          {items.length > 1 && (
+            <>
+              <button
+                onClick={() => setActiveIndex((prev) => (prev - 1 + items.length) % items.length)}
+                className="absolute left-3 top-1/2 -translate-y-1/2 p-2 rounded-full bg-black/50 hover:bg-black/80 text-white backdrop-blur-md transition-all hover:scale-110 cursor-pointer z-10 border border-white/20"
+                title="Foto Precedente"
+              >
+                <ChevronLeft className="w-5 h-5" />
+              </button>
+              <button
+                onClick={() => setActiveIndex((prev) => (prev + 1) % items.length)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 p-2 rounded-full bg-black/50 hover:bg-black/80 text-white backdrop-blur-md transition-all hover:scale-110 cursor-pointer z-10 border border-white/20"
+                title="Foto Successiva"
+              >
+                <ChevronRight className="w-5 h-5" />
+              </button>
+            </>
+          )}
+
+          {/* Bottom Title & Description Overlay */}
+          <div className="absolute bottom-3 left-3 right-3 z-10 text-white space-y-1 pointer-events-none">
+            {title && (
+              <h3
+                className="text-base md:text-lg font-bold leading-tight drop-shadow-md"
+                style={customColor ? { color: customColor } : {}}
+              >
+                {String(title)}
+              </h3>
+            )}
+            {subtitle && (
+              <p className="text-xs font-medium text-slate-200 opacity-90 drop-shadow">
+                {String(subtitle)}
+              </p>
+            )}
+            {body && (
+              <p className="text-[11px] text-slate-300 line-clamp-2 leading-snug drop-shadow opacity-80">
+                {String(body)}
+              </p>
+            )}
+          </div>
+        </div>
+
+        {/* Bottom Thumbnail Strip */}
+        {items.length > 0 && (
+          <div className="flex items-center gap-2 overflow-x-auto pb-1 pt-1 no-scrollbar">
+            {items.map((thumbItem, idx) => {
+              const thumbImg = getKeyValue(thumbItem, config.imageKey) || thumbItem.image || thumbItem.photo || thumbItem.url || thumbItem.src;
+              const isSelected = idx === activeIndex;
+
+              return (
+                <button
+                  key={idx}
+                  onClick={() => setActiveIndex(idx)}
+                  className={`relative w-14 h-14 md:w-16 md:h-16 rounded-xl overflow-hidden flex-shrink-0 transition-all cursor-pointer border-2 ${
+                    isSelected
+                      ? 'border-indigo-500 scale-105 shadow-md ring-2 ring-indigo-500/30'
+                      : 'border-transparent opacity-60 hover:opacity-100 hover:scale-100'
+                  }`}
+                >
+                  {thumbImg ? (
+                    <img
+                      src={String(thumbImg)}
+                      alt={`Thumb ${idx + 1}`}
+                      className="w-full h-full object-cover"
+                      referrerPolicy="no-referrer"
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1579783902614-a3fb3927b675?auto=format&fit=crop&w=200&q=80';
+                      }}
+                    />
+                  ) : (
+                    <div className="w-full h-full bg-slate-700 flex items-center justify-center text-[10px] text-slate-300 font-mono">
+                      #{idx + 1}
+                    </div>
+                  )}
+                </button>
+              );
+            })}
+
+            {onDataChange && (
+              <label className="cursor-pointer flex-shrink-0">
+                <input
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  onChange={handleImageUpload}
+                  className="hidden"
+                />
+                <div className="w-14 h-14 md:w-16 md:h-16 rounded-xl border-2 border-dashed border-slate-400/50 hover:border-indigo-500 bg-white/10 hover:bg-white/20 text-slate-300 hover:text-white flex flex-col items-center justify-center gap-1 transition-all">
+                  <Plus className="w-5 h-5" />
+                  <span className="text-[9px] font-mono font-bold uppercase">Foto</span>
+                </div>
+              </label>
+            )}
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  // ---------------------------------------------
+  // 11. RAW BEAUTIFIED JSON VIEW
   // ---------------------------------------------
   const renderRaw = () => {
     return (
@@ -1491,6 +1731,7 @@ export default function WidgetView({
   const getLayoutContent = () => {
     switch (config.layout) {
       case 'carousel': return renderCarousel();
+      case 'gallery': return renderGallery();
       case 'grid': return renderGrid();
       case 'list': return renderList();
       case 'table': return renderTable();

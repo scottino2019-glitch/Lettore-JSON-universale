@@ -18,7 +18,10 @@ import {
   Settings2,
   Tv,
   Sparkles,
-  Play
+  Play,
+  Upload,
+  ImagePlus,
+  Camera
 } from 'lucide-react';
 import { WidgetConfig, WidgetLayout, WidgetTheme } from '../types';
 import { SAMPLE_TEMPLATES } from '../samples';
@@ -84,24 +87,45 @@ export default function Configurator({
     }
   };
 
-  // Apply custom raw JSON pasted
-  const handleApplyJson = () => {
-    try {
-      const parsed = JSON.parse(jsonText);
-      onJsonDataChange(parsed);
-      onJsonUrlChange(''); // Local data now
-      
-      // Keep existing key configurations if the keys still exist in the new data!
-      const paths = availableKeys(parsed);
-      const currentTitleKeyExists = currentConfig.titleKey && paths.includes(currentConfig.titleKey);
-      
-      if (!currentTitleKeyExists) {
-        // Only reset / re-guess keys if our titleKey is missing (i.e. structure changed completely)
-        guessKeys(parsed);
-      }
-    } catch (err: any) {
-      alert(`JSON non valido: ${err.message}`);
-    }
+  // Handle uploading photos directly from Smartphone or PC
+  const handleUploadPhotos = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+
+    const fileList: File[] = Array.from(files);
+    const readPromises = fileList.map((file, idx) => {
+      return new Promise<any>((resolve) => {
+        const reader = new FileReader();
+        reader.onload = (event) => {
+          resolve({
+            id: Date.now() + idx,
+            titolo: file.name.replace(/\.[^/.]+$/, ""),
+            luogo: "Foto Personale",
+            descrizione: `Caricata da dispositivo (${file.name})`,
+            categoria: "Foto 📱",
+            foto: event.target?.result as string,
+            colore: "#0284c7"
+          });
+        };
+        reader.readAsDataURL(file);
+      });
+    });
+
+    Promise.all(readPromises).then((newItems) => {
+      onJsonDataChange(newItems);
+      onJsonUrlChange(''); // Reset URL to local
+      setTempUrl('');
+      onConfigChange({
+        ...currentConfig,
+        layout: 'gallery',
+        titleKey: 'titolo',
+        subtitleKey: 'luogo',
+        bodyKey: 'descrizione',
+        imageKey: 'foto',
+        badgeKey: 'categoria',
+        colorKey: 'colore'
+      });
+    });
   };
 
   const availableKeys = (data?: any) => {
@@ -125,70 +149,119 @@ export default function Configurator({
     return paths;
   };
 
+  // Ensure all configured keys exist in the current JSON dataset, otherwise auto-guess replacement
+  const ensureValidKeys = (data: any, cfg: WidgetConfig): WidgetConfig => {
+    const paths = availableKeys(data);
+    if (paths.length === 0) return cfg;
+
+    const updates: Partial<WidgetConfig> = {};
+
+    const titleCandidates = ['titolo', 'title', 'video_title', 'name', 'nome', 'word', 'termine', 'concetto', 'vocabolario', 'autore', 'author', 'evento', 'event', 'metrica', 'metric', 'id'];
+    const subtitleCandidates = ['sottotitolo', 'subtitle', 'channel', 'canale', 'author', 'autore', 'pronunciation', 'pronuncia', 'valore', 'value', 'price', 'prezzo', 'ruolo', 'role', 'orario', 'time', 'category', 'categoria'];
+    const bodyCandidates = ['descrizione', 'description', 'translation', 'traduzione', 'body', 'content', 'commento', 'text', 'testo', 'esempio', 'example', 'andamento', 'trend', 'aula'];
+    const imageCandidates = ['foto', 'image', 'img', 'avatar', 'pic', 'foto_piatto', 'photo', 'copertina', 'cover', 'thumbnail', 'thumb', 'copertina_video', 'poster'];
+    const badgeCandidates = ['categoria', 'category', 'level', 'livello', 'stato', 'status', 'tag', 'punteggio', 'rating', 'duration', 'durata'];
+    const colorCandidates = ['colore', 'color', 'colore_tag', 'colore_indicatore', 'bg', 'accent'];
+    const videoCandidates = ['youtube_id', 'video_id', 'video_url', 'video', 'youtube', 'yt', 'copertina_video', 'link_video', 'url_video', 'url', 'link', 'src', 'href', 'media', 'embed', 'video_link', 'youtube_url', 'embed_url'];
+
+    // Title key
+    if (!cfg.titleKey || !paths.includes(cfg.titleKey)) {
+      let tKey = paths.find(k => titleCandidates.includes(k.split('.').pop()!.toLowerCase())) || '';
+      if (!tKey && paths.includes('id')) tKey = 'id';
+      if (!tKey) tKey = paths[0] || '';
+      updates.titleKey = tKey;
+    }
+
+    // Subtitle key
+    if (!cfg.subtitleKey || !paths.includes(cfg.subtitleKey)) {
+      const activeTitle = updates.titleKey || cfg.titleKey;
+      const sKey = paths.find(k => subtitleCandidates.includes(k.split('.').pop()!.toLowerCase()) && k !== activeTitle) || '';
+      updates.subtitleKey = sKey;
+    }
+
+    // Body key
+    if (!cfg.bodyKey || !paths.includes(cfg.bodyKey)) {
+      const activeTitle = updates.titleKey || cfg.titleKey;
+      const activeSub = updates.subtitleKey !== undefined ? updates.subtitleKey : cfg.subtitleKey;
+      const bKey = paths.find(k => bodyCandidates.includes(k.split('.').pop()!.toLowerCase()) && k !== activeTitle && k !== activeSub) || '';
+      updates.bodyKey = bKey;
+    }
+
+    // Image key
+    if (!cfg.imageKey || !paths.includes(cfg.imageKey)) {
+      const iKey = paths.find(k => imageCandidates.includes(k.split('.').pop()!.toLowerCase())) || '';
+      updates.imageKey = iKey;
+    }
+
+    // Badge key
+    if (!cfg.badgeKey || !paths.includes(cfg.badgeKey)) {
+      const activeTitle = updates.titleKey || cfg.titleKey;
+      const activeSub = updates.subtitleKey !== undefined ? updates.subtitleKey : cfg.subtitleKey;
+      const activeBody = updates.bodyKey !== undefined ? updates.bodyKey : cfg.bodyKey;
+      const bgKey = paths.find(k => badgeCandidates.includes(k.split('.').pop()!.toLowerCase()) && k !== activeTitle && k !== activeSub && k !== activeBody) || '';
+      updates.badgeKey = bgKey;
+    }
+
+    // Video key
+    if (!cfg.videoKey || !paths.includes(cfg.videoKey)) {
+      const vKey = paths.find(k => videoCandidates.includes(k.split('.').pop()!.toLowerCase())) || '';
+      updates.videoKey = vKey;
+    }
+
+    // Color key
+    if (cfg.colorKey && !paths.includes(cfg.colorKey)) {
+      const cKey = paths.find(k => colorCandidates.includes(k.split('.').pop()!.toLowerCase())) || '';
+      updates.colorKey = cKey;
+    }
+
+    if (Object.keys(updates).length > 0) {
+      return { ...cfg, ...updates };
+    }
+    return cfg;
+  };
+
   // Guess best keys for mapping when new JSON loaded
   const guessKeys = (data: any) => {
     const firstItem = Array.isArray(data) ? data[0] : data;
     if (!firstItem || typeof firstItem !== 'object') return;
 
-    // Use availableKeys to find all available paths (including deep paths) for the new data
-    const paths = availableKeys(data);
-    const updates: Partial<WidgetConfig> = {};
-
-    // Guess Title - prioritize rich content words and names, only fallback to ID as last resort
-    const titleCandidates = ['titolo', 'title', 'word', 'name', 'nome', 'termine', 'concetto', 'vocabolario', 'autore', 'author', 'evento', 'event', 'metrica', 'metric'];
-    let titleKey = paths.find(k => titleCandidates.includes(k.split('.').pop()!.toLowerCase())) || '';
-    if (!titleKey && paths.includes('id')) {
-      titleKey = 'id';
-    }
-    if (!titleKey) {
-      titleKey = paths[0] || '';
-    }
-    updates.titleKey = titleKey;
-
-    // Guess Subtitle
-    const subtitleCandidates = ['sottotitolo', 'subtitle', 'pronunciation', 'pronuncia', 'valore', 'value', 'price', 'prezzo', 'ruolo', 'role', 'orario', 'time', 'category', 'categoria'];
-    const subtitleKey = paths.find(k => subtitleCandidates.includes(k.split('.').pop()!.toLowerCase()) && k !== titleKey) || '';
-    updates.subtitleKey = subtitleKey;
-
-    // Guess Body
-    const bodyCandidates = ['descrizione', 'description', 'translation', 'traduzione', 'body', 'content', 'commento', 'text', 'testo', 'esempio', 'example', 'andamento', 'trend', 'aula'];
-    const bodyKey = paths.find(k => bodyCandidates.includes(k.split('.').pop()!.toLowerCase()) && k !== titleKey && k !== subtitleKey) || '';
-    updates.bodyKey = bodyKey;
-
-    // Guess Image
-    const imageCandidates = ['foto', 'image', 'img', 'avatar', 'pic', 'foto_piatto', 'photo', 'copertina', 'cover', 'thumbnail'];
-    const imageKey = paths.find(k => imageCandidates.includes(k.split('.').pop()!.toLowerCase())) || '';
-    updates.imageKey = imageKey;
-
-    // Guess Badge
-    const badgeCandidates = ['categoria', 'category', 'level', 'livello', 'stato', 'status', 'tag', 'punteggio', 'rating'];
-    const badgeKey = paths.find(k => badgeCandidates.includes(k.split('.').pop()!.toLowerCase()) && k !== titleKey && k !== subtitleKey && k !== bodyKey) || '';
-    updates.badgeKey = badgeKey;
-
-    // Guess Color
-    const colorCandidates = ['colore', 'color', 'colore_tag', 'colore_indicatore', 'bg', 'accent'];
-    const colorKey = paths.find(k => colorCandidates.includes(k.split('.').pop()!.toLowerCase())) || '';
-    updates.colorKey = colorKey;
-
-    // Guess Video Key
-    const videoCandidates = ['youtube_id', 'video_id', 'video_url', 'video', 'youtube', 'yt', 'copertina_video', 'link_video', 'url_video'];
-    const videoKey = paths.find(k => videoCandidates.includes(k.split('.').pop()!.toLowerCase())) || '';
-    updates.videoKey = videoKey;
-
-    updates.extraKeys = []; // Reset extra keys when loading new structure
+    const newCfg = ensureValidKeys(data, {
+      ...currentConfig,
+      titleKey: '',
+      subtitleKey: '',
+      bodyKey: '',
+      imageKey: '',
+      badgeKey: '',
+      videoKey: '',
+      colorKey: ''
+    });
 
     onConfigChange({
-      ...currentConfig,
-      ...updates
+      ...newCfg,
+      extraKeys: []
     });
   };
 
-  // Auto-guess keys when jsonData changes if the current titleKey is not in the new keys
+  // Apply custom raw JSON pasted
+  const handleApplyJson = () => {
+    try {
+      const parsed = JSON.parse(jsonText);
+      onJsonDataChange(parsed);
+      onJsonUrlChange(''); // Local data now
+      
+      const updatedCfg = ensureValidKeys(parsed, currentConfig);
+      onConfigChange(updatedCfg);
+    } catch (err: any) {
+      alert(`JSON non valido: ${err.message}`);
+    }
+  };
+
+  // Auto-verify and adjust keys when jsonData changes
   useEffect(() => {
     if (!jsonData) return;
-    const paths = availableKeys(jsonData);
-    if (paths.length > 0 && currentConfig.titleKey && !paths.includes(currentConfig.titleKey)) {
-      guessKeys(jsonData);
+    const verifiedCfg = ensureValidKeys(jsonData, currentConfig);
+    if (verifiedCfg !== currentConfig) {
+      onConfigChange(verifiedCfg);
     }
   }, [jsonData]);
 
@@ -1020,6 +1093,43 @@ export default function Configurator({
                 </div>
               </div>
 
+              {/* Photo Upload Section */}
+              <div className="border-t-2 border-[#1A1C1E] pt-4 space-y-3">
+                <div className="flex justify-between items-center">
+                  <label className="text-xs font-display font-black text-[#1A1C1E] block uppercase tracking-tight flex items-center gap-1.5">
+                    <Camera className="w-3.5 h-3.5 text-sky-600" />
+                    Carica Foto dal Cellulare o PC
+                  </label>
+                  <span className="text-[9px] bg-sky-600 text-white font-mono font-bold px-1.5 py-0.5 uppercase tracking-tighter">Istantaneo</span>
+                </div>
+                <p className="text-[11px] text-slate-500 font-sans">
+                  Seleziona o scatta una o più immagini dal tuo smartphone o computer per creare subito una galleria o slide foto personalizzata:
+                </p>
+                
+                <label className="block w-full cursor-pointer">
+                  <input
+                    type="file"
+                    accept="image/*"
+                    multiple
+                    onChange={handleUploadPhotos}
+                    className="hidden"
+                  />
+                  <div className="w-full p-4 rounded-xl border-2 border-dashed border-[#1A1C1E] bg-sky-50/60 hover:bg-sky-100/80 transition-all flex flex-col items-center justify-center gap-2 group text-center shadow-[2px_2px_0px_0px_rgba(26,28,30,1)] active:translate-y-0.5">
+                    <div className="p-2.5 rounded-full bg-white border border-[#1A1C1E] text-sky-600 group-hover:scale-110 transition-transform shadow-sm">
+                      <ImagePlus className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <span className="text-xs font-mono font-black text-[#1A1C1E] uppercase block">
+                        Seleziona o Scatta Foto 📸
+                      </span>
+                      <span className="text-[10px] text-slate-500 font-sans">
+                        PNG, JPG, WEBP • Selezione multipla supportata
+                      </span>
+                    </div>
+                  </div>
+                </label>
+              </div>
+
               <div className="border-t-2 border-[#1A1C1E] pt-4 space-y-3">
                 <div className="flex justify-between items-center">
                   <label className="text-xs font-display font-black text-[#1A1C1E] block uppercase tracking-tight flex items-center gap-1.5">
@@ -1270,6 +1380,7 @@ export default function Configurator({
                 <div className="grid grid-cols-2 gap-2">
                   {[
                     { id: 'carousel', label: '🎡 Carosello / Slider', desc: 'Cambio periodico automatico' },
+                    { id: 'gallery', label: '🖼️ Galleria / Slide Foto', desc: 'Slideshow foto con miniature' },
                     { id: 'grid', label: '🍱 Bento Grid', desc: 'Griglia moderna reattiva' },
                     { id: 'list', label: '📃 Lista Dettagliata', desc: 'Layout verticale ordinato' },
                     { id: 'table', label: '📅 Tabella Oraria', desc: 'Tabellare strutturata' },
@@ -1406,7 +1517,7 @@ export default function Configurator({
                 </div>
 
                 {/* Autoplay Slide Toggle */}
-                {['carousel', 'ticker', 'metric'].includes(currentConfig.layout) && (
+                {['carousel', 'ticker', 'metric', 'gallery'].includes(currentConfig.layout) && (
                   <div className="space-y-2">
                     <div className="flex items-center justify-between text-xs">
                       <span className="font-semibold text-slate-600">Rotazione Automatica Elementi</span>
@@ -1637,6 +1748,7 @@ export default function Configurator({
             isLoading={isLoading}
             error={error}
             onManualRefresh={jsonUrl ? () => onFetchData(jsonUrl) : undefined}
+            onDataChange={onJsonDataChange}
             lastUpdated={lastUpdated}
             isIframeMode={false}
           />
