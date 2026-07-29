@@ -1,4 +1,4 @@
-export type WidgetLayout = 'carousel' | 'grid' | 'list' | 'table' | 'ticker' | 'metric' | 'quiz' | 'video' | 'flashcard' | 'raw';
+export type WidgetLayout = 'carousel' | 'grid' | 'list' | 'table' | 'ticker' | 'metric' | 'quiz' | 'video' | 'flashcard' | 'gallery' | 'raw';
 
 export type WidgetTheme = 'light' | 'dark' | 'glass' | 'corporate' | 'retro' | 'playful' | 'highdensity';
 
@@ -14,6 +14,7 @@ export interface WidgetConfig {
   imageKey: string;
   colorKey: string;
   badgeKey: string;
+  videoKey: string;
   extraKeys: string[];
   fontSize: 'sm' | 'base' | 'lg';
   borderRadius: 'none' | 'sm' | 'md' | 'lg' | 'xl';

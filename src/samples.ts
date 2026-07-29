@@ -246,6 +246,64 @@ export const SAMPLE_TEMPLATES: SampleTemplate[] = [
     }
   },
   {
+    id: 'photo_gallery',
+    name: '🖼️ Galleria Fotografica & Slide Foto',
+    description: 'Presentazione di immagini e fotografie in formato slideshow elegante con miniature e didascalie.',
+    icon: 'Image',
+    data: [
+      {
+        id: 1,
+        titolo: "Paesaggio Dolomitico",
+        luogo: "Tre Cime di Lavaredo, Italia",
+        descrizione: "Una meravigliosa vista panoramica durante il tramonto alpino con colori caldi e spettacolari.",
+        categoria: "Natura 🏔️",
+        foto: "https://images.unsplash.com/photo-1506744038136-46273834b3fb?w=800&auto=format&fit=crop&q=80",
+        colore: "#0284c7"
+      },
+      {
+        id: 2,
+        titolo: "Scorcio Tropicale",
+        luogo: "Maldive, Oceano Indiano",
+        descrizione: "Spiagge bianchissime e acque cristalline turquoise immerse nella tranquillità della barriera corallina.",
+        categoria: "Viaggi 🏝️",
+        foto: "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=800&auto=format&fit=crop&q=80",
+        colore: "#0d9488"
+      },
+      {
+        id: 3,
+        titolo: "Architettura Moderna",
+        luogo: "Tokyo, Giappone",
+        descrizione: "Luci al neon, linee geometriche e grattacieli futuristici nel cuore pulsante della metropoli nipponica.",
+        categoria: "Città 🏙️",
+        foto: "https://images.unsplash.com/photo-1503899036084-c55cdd92da26?w=800&auto=format&fit=crop&q=80",
+        colore: "#e11d48"
+      },
+      {
+        id: 4,
+        titolo: "Foresta Autunnale",
+        luogo: "Foresta Nera, Germania",
+        descrizione: "Sentieri immersi nei colori caldi del foliage autunnale, tra sfumature dorate e il profumo dei pini.",
+        categoria: "Paesaggi 🌲",
+        foto: "https://images.unsplash.com/photo-1441974231531-c6227db76b6e?w=800&auto=format&fit=crop&q=80",
+        colore: "#d97706"
+      }
+    ],
+    defaultConfig: {
+      layout: 'gallery',
+      titleKey: 'titolo',
+      subtitleKey: 'luogo',
+      bodyKey: 'descrizione',
+      imageKey: 'foto',
+      badgeKey: 'categoria',
+      colorKey: 'colore',
+      cycleInterval: 4,
+      autoplay: true,
+      animation: 'fade',
+      theme: 'highdensity',
+      borderRadius: 'xl'
+    }
+  },
+  {
     id: 'events_table',
     name: 'Tabella Orari ed Eventi',
     description: 'Visualizza informazioni dettagliate in formato tabellare strutturato, ordinato e leggibile.',
